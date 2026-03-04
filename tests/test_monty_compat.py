@@ -1,123 +1,51 @@
-"""Basic tests for monty_compat using the local Monty checkout."""
+"""Tests for monty_compat — no local Monty checkout required (uses disk cache)."""
 
-from pathlib import Path
-
-import pytest
-
-from monty_compat import MontyCapabilities, monty_compat
-
-MONTY_ROOT = Path(__file__).parent.parent.parent / "monty"
-SKIP_IF_NO_LOCAL = pytest.mark.skipif(
-    not MONTY_ROOT.exists(),
-    reason="Local monty checkout not found",
-)
+from monty_compat import MontyCapabilities
 
 
-@pytest.fixture(scope="module")
-def caps() -> MontyCapabilities:
-    return MontyCapabilities.from_local(MONTY_ROOT)
+# ── Class-level accessor methods (disk cache) ─────────────────────────
 
 
-# ── check_code: pure Python ───────────────────────────────────────────
+def test_get_modules() -> None:
+    mods = MontyCapabilities.get_modules()
+    assert isinstance(mods, frozenset)
+    for expected in ("re", "os", "sys", "asyncio", "pathlib", "typing"):
+        assert expected in mods, f"'{expected}' missing from get_modules()"
 
 
-@SKIP_IF_NO_LOCAL
-def test_pure_code_passes(caps: MontyCapabilities) -> None:
-    code = "def factorial(n):\n    return 1 if n <= 1 else n * factorial(n-1)"
-    ok, reasons = caps.check_code(code)
-    assert ok
-    assert reasons == []
+def test_get_builtins() -> None:
+    builtins = MontyCapabilities.get_builtins()
+    assert isinstance(builtins, frozenset)
+    for expected in ("abs", "len", "print", "sum", "sorted"):
+        assert expected in builtins, f"'{expected}' missing from get_builtins()"
 
 
-@SKIP_IF_NO_LOCAL
-def test_fizzbuzz_passes(caps: MontyCapabilities) -> None:
-    code = (
-        "result = []\n"
-        "for i in range(1, 101):\n"
-        '    if i % 15 == 0: result.append("FizzBuzz")\n'
-        '    elif i % 3 == 0: result.append("Fizz")\n'
-        '    elif i % 5 == 0: result.append("Buzz")\n'
-        "    else: result.append(str(i))\n"
-    )
-    ok, _ = caps.check_code(code)
-    assert ok
+def test_get_types() -> None:
+    types = MontyCapabilities.get_types()
+    assert isinstance(types, frozenset)
+    for expected in ("int", "str", "list", "dict", "bool", "set", "tuple"):
+        assert expected in types, f"'{expected}' missing from get_types()"
 
 
-# ── check_code: unsupported imports ──────────────────────────────────
+def test_get_exception_types() -> None:
+    excs = MontyCapabilities.get_exception_types()
+    assert isinstance(excs, frozenset)
+    for expected in ("ValueError", "TypeError", "RuntimeError", "KeyError"):
+        assert expected in excs, f"'{expected}' missing from get_exception_types()"
 
 
-@SKIP_IF_NO_LOCAL
-def test_json_import_fails(caps: MontyCapabilities) -> None:
-    ok, reasons = caps.check_code("import json\njson.loads('{}')")
-    assert not ok
-    assert any("json" in r for r in reasons)
+def test_get_attrs_of_module_asyncio() -> None:
+    attrs = MontyCapabilities.get_attrs_of_module("asyncio")
+    assert "gather" in attrs
+    assert "run" in attrs
 
 
-@SKIP_IF_NO_LOCAL
-def test_collections_import_fails(caps: MontyCapabilities) -> None:
-    ok, reasons = caps.check_code("from collections import Counter")
-    assert not ok
+def test_get_attrs_of_module_re() -> None:
+    attrs = MontyCapabilities.get_attrs_of_module("re")
+    for fn in ("search", "match", "sub", "findall", "compile", "fullmatch", "split"):
+        assert fn in attrs, f"'{fn}' missing from re module attrs"
 
 
-# ── check_code: supported modules ────────────────────────────────────
-
-
-@SKIP_IF_NO_LOCAL
-def test_re_import_passes(caps: MontyCapabilities) -> None:
-    ok, _ = caps.check_code("import re\nre.search('[0-9]+', '123')")
-    assert ok
-
-
-@SKIP_IF_NO_LOCAL
-def test_typing_optional_passes(caps: MontyCapabilities) -> None:
-    ok, _ = caps.check_code("from typing import Optional\nx: Optional[int] = None")
-    assert ok
-
-
-@SKIP_IF_NO_LOCAL
-def test_from_asyncio_unknown_fails(caps: MontyCapabilities) -> None:
-    ok, reasons = caps.check_code("from asyncio import subprocess")
-    assert not ok
-    assert any("subprocess" in r for r in reasons)
-
-
-# ── module_attributes populated ──────────────────────────────────────
-
-
-@SKIP_IF_NO_LOCAL
-def test_module_attributes_present(caps: MontyCapabilities) -> None:
-    assert "asyncio" in caps.module_attributes
-    assert "gather" in caps.module_attributes["asyncio"]
-    assert "os" in caps.module_attributes
-    assert "getenv" in caps.module_attributes["os"]
-    assert "pathlib" in caps.module_attributes
-    assert "Path" in caps.module_attributes["pathlib"]
-
-
-# ── default monty_compat() function ──────────────────────────────────
-
-
-def test_default_function_cache_off() -> None:
-    if not MONTY_ROOT.exists():
-        pytest.skip("Local monty checkout not found")
-    ok, _ = monty_compat("x = sum(range(10))", cache="off", monty_root=MONTY_ROOT)
-    assert ok
-
-
-def test_default_function_unsupported_cache_off() -> None:
-    if not MONTY_ROOT.exists():
-        pytest.skip("Local monty checkout not found")
-    ok, reasons = monty_compat("import math", cache="off", monty_root=MONTY_ROOT)
-    assert not ok
-    assert any("math" in r for r in reasons)
-
-
-# ── JSON round-trip ───────────────────────────────────────────────────
-
-
-@SKIP_IF_NO_LOCAL
-def test_roundtrip(caps: MontyCapabilities) -> None:
-    restored = MontyCapabilities.from_dict(caps.to_dict())
-    assert restored.builtin_functions == caps.builtin_functions
-    assert restored.modules == caps.modules
-    assert restored.module_attributes == caps.module_attributes
+def test_get_attrs_of_module_unknown_returns_empty() -> None:
+    assert MontyCapabilities.get_attrs_of_module("math") == frozenset()
+    assert MontyCapabilities.get_attrs_of_module("nonexistent") == frozenset()

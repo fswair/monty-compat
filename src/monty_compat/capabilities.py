@@ -15,16 +15,10 @@ from urllib.request import urlopen
 _GITHUB_ZIP = "https://github.com/pydantic/monty/archive/refs/heads/main.zip"
 _BUILTINS_REL = "crates/monty/src/builtins/mod.rs"
 _MODULES_REL = "crates/monty/src/modules/mod.rs"
+_MODULES_DIR_REL = "crates/monty/src/modules"
 _TYPES_REL = "crates/monty/src/types/type.rs"
 _EXCEPTIONS_REL = "crates/monty/src/exception_private.rs"
 _INTERN_REL = "crates/monty/src/intern.rs"
-_MODULE_FILES = {
-    "asyncio": "crates/monty/src/modules/asyncio.rs",
-    "os": "crates/monty/src/modules/os.rs",
-    "pathlib": "crates/monty/src/modules/pathlib.rs",
-    "sys": "crates/monty/src/modules/sys.rs",
-    "typing": "crates/monty/src/modules/typing.rs",
-}
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -186,10 +180,11 @@ class _Sources:
     @classmethod
     def from_local(cls, root: Path) -> _Sources:
         mod_files: dict[str, str] = {}
-        for name, rel in _MODULE_FILES.items():
-            p = root / rel
-            if p.exists():
-                mod_files[name] = p.read_text()
+        modules_dir = root / _MODULES_DIR_REL
+        if modules_dir.is_dir():
+            for p in sorted(modules_dir.glob("*.rs")):
+                if p.stem != "mod":
+                    mod_files[p.stem] = p.read_text()
         return cls(
             builtins=(root / _BUILTINS_REL).read_text(),
             modules=(root / _MODULES_REL).read_text(),
@@ -205,11 +200,12 @@ class _Sources:
             return zf.read(prefix + rel).decode()
 
         mod_files: dict[str, str] = {}
-        for name, rel in _MODULE_FILES.items():
-            try:
-                mod_files[name] = read(rel)
-            except KeyError:
-                pass
+        modules_prefix = prefix + _MODULES_DIR_REL + "/"
+        for zi in zf.infolist():
+            if zi.filename.startswith(modules_prefix) and zi.filename.endswith(".rs"):
+                stem = zi.filename[len(modules_prefix):].rstrip("/")
+                if stem and "/" not in stem and stem != "mod.rs":
+                    mod_files[stem[:-3]] = zf.read(zi.filename).decode()
         return cls(
             builtins=read(_BUILTINS_REL),
             modules=read(_MODULES_REL),
@@ -290,6 +286,98 @@ class MontyCapabilities:
         zf = zipfile.ZipFile(io.BytesIO(data))
         return _build_from_sources(_Sources.from_zip(zf, f"monty-{branch}/"))
 
+    # ── Cache-backed class-level accessors ────────────────────────────
+
+    @classmethod
+    def _cached(cls, *, cache: bool = True) -> MontyCapabilities:
+        """Load capabilities from cache (or rebuild if *cache* is False)."""
+        from .cache import get_capabilities
+        return get_capabilities(cache="auto" if cache else "regenerate")
+
+    @classmethod
+    def get_modules(cls, *, cache: bool = True) -> frozenset[str]:
+        """Return the set of importable stdlib module names Monty supports.
+
+        Args:
+            cache: Set to ``False`` to discard the on-disk cache and rebuild
+                from the GitHub source before returning.
+
+        Example::
+
+            MontyCapabilities.get_modules()
+            # frozenset({'asyncio', 'os', 'pathlib', 're', 'sys', 'typing'})
+        """
+        return cls._cached(cache=cache).modules
+
+    @classmethod
+    def get_builtins(cls, *, cache: bool = True) -> frozenset[str]:
+        """Return the set of builtin function names Monty has implemented.
+
+        Args:
+            cache: Set to ``False`` to discard the on-disk cache and rebuild.
+
+        Example::
+
+            MontyCapabilities.get_builtins()
+            # frozenset({'abs', 'all', 'any', 'bin', 'chr', …})
+        """
+        return cls._cached(cache=cache).builtin_functions
+
+    @classmethod
+    def get_types(cls, *, cache: bool = True) -> frozenset[str]:
+        """Return the set of type constructor names available as builtins.
+
+        Args:
+            cache: Set to ``False`` to discard the on-disk cache and rebuild.
+
+        Example::
+
+            MontyCapabilities.get_types()
+            # frozenset({'bool', 'bytes', 'dict', 'float', 'frozenset', …})
+        """
+        return cls._cached(cache=cache).type_constructors
+
+    @classmethod
+    def get_exception_types(cls, *, cache: bool = True) -> frozenset[str]:
+        """Return the set of exception class names Monty supports.
+
+        Args:
+            cache: Set to ``False`` to discard the on-disk cache and rebuild.
+
+        Example::
+
+            MontyCapabilities.get_exception_types()
+            # frozenset({'ValueError', 'TypeError', 'RuntimeError', …})
+        """
+        return cls._cached(cache=cache).exception_types
+
+    @classmethod
+    def get_attrs_of_module(
+        cls,
+        module: str,
+        *,
+        cache: bool = True,
+    ) -> frozenset[str]:
+        """Return the set of attributes/functions available inside *module*.
+
+        Returns an empty frozenset if the module is not supported or has no
+        known attribute data.
+
+        Args:
+            module: Module name, e.g. ``'asyncio'``, ``'os'``, ``'typing'``.
+            cache: Set to ``False`` to discard the on-disk cache and rebuild.
+
+        Example::
+
+            MontyCapabilities.get_attrs_of_module('asyncio')
+            # frozenset({'gather', 'run'})
+
+            MontyCapabilities.get_attrs_of_module('typing')
+            # frozenset({'Any', 'Optional', 'Union', 'List', …})
+        """
+        caps = cls._cached(cache=cache)
+        return caps.module_attributes.get(module, frozenset())
+
     # ── JSON serialisation ────────────────────────────────────────────
 
     def to_dict(self) -> dict[str, Any]:
@@ -339,7 +427,11 @@ class MontyCapabilities:
         return len(reasons) == 0, reasons
 
     def _check_node(self, node: ast.AST, reasons: list[str]) -> None:
-        if isinstance(node, ast.Import):
+        if isinstance(node, ast.ClassDef):
+            reasons.append(f"class definitions are not supported by Monty ('{node.name}')")
+            return  # no need to descend into the class body
+
+        elif isinstance(node, ast.Import):
             for alias in node.names:
                 top = alias.name.split(".")[0]
                 if top not in self.modules:
