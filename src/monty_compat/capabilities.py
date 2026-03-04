@@ -226,15 +226,17 @@ def _build_from_sources(src: _Sources) -> MontyCapabilities:
         enum_name = mod_name.capitalize() + "Functions"
         funcs = _parse_module_functions_enum(mod_src, enum_name)
         attrs = _parse_module_attributes(mod_src, ss_map)
-        combined = funcs | attrs
-        if combined:
-            mod_attrs[mod_name] = frozenset(combined)
+        mod_attrs[mod_name] = frozenset(funcs | attrs)
+
+    # modules = what mod.rs declares ∪ every .rs file found in modules/
+    parsed_modules = frozenset(_parse_builtin_modules(src.modules))
+    all_modules = parsed_modules | frozenset(src.module_files.keys())
 
     return MontyCapabilities(
         builtin_functions=frozenset(_parse_builtin_functions(src.builtins)),
         type_constructors=frozenset(_parse_type_constructors(src.types)),
         exception_types=frozenset(_parse_exception_types(src.exceptions)),
-        modules=frozenset(_parse_builtin_modules(src.modules)),
+        modules=all_modules,
         module_attributes=mod_attrs,
     )
 
