@@ -4,21 +4,39 @@ from __future__ import annotations
 
 import ast
 import io
+import json
 import re
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 # ── GitHub source locations ──────────────────────────────────────────
 _GITHUB_ZIP = "https://github.com/pydantic/monty/archive/refs/heads/main.zip"
+_GITHUB_RELEASE_API = "https://api.github.com/repos/pydantic/monty/releases/latest"
+_GITHUB_TAG_ZIP = "https://github.com/pydantic/monty/archive/refs/tags/{tag}.zip"
 _BUILTINS_REL = "crates/monty/src/builtins/mod.rs"
 _MODULES_REL = "crates/monty/src/modules/mod.rs"
 _MODULES_DIR_REL = "crates/monty/src/modules"
 _TYPES_REL = "crates/monty/src/types/type.rs"
 _EXCEPTIONS_REL = "crates/monty/src/exception_private.rs"
 _INTERN_REL = "crates/monty/src/intern.rs"
+
+
+# ══════════════════════════════════════════════════════════════════════
+# GitHub helpers
+# ══════════════════════════════════════════════════════════════════════
+
+
+def _fetch_latest_release_tag() -> str:
+    """Return the tag name of the latest Monty GitHub release (e.g. 'v0.4.0')."""
+    req = Request(
+        _GITHUB_RELEASE_API,
+        headers={"Accept": "application/vnd.github+json", "User-Agent": "monty-compat"},
+    )
+    with urlopen(req) as resp:  # noqa: S310
+        return json.loads(resp.read())["tag_name"]
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -281,77 +299,103 @@ class MontyCapabilities:
         return _build_from_sources(_Sources.from_local(Path(monty_root)))
 
     @classmethod
-    def from_github(cls, url: str = _GITHUB_ZIP, *, branch: str = "main") -> MontyCapabilities:
-        """Download the Monty repo as a ZIP archive and parse capabilities in memory."""
-        with urlopen(url) as resp:  # noqa: S310
+    def from_github(
+        cls,
+        url: str = _GITHUB_ZIP,
+        *,
+        branch: str = "main",
+        only_released: bool = True,
+    ) -> MontyCapabilities:
+        """Download the Monty repo as a ZIP archive and parse capabilities in memory.
+
+        Args:
+            url: ZIP archive URL.  Ignored when *only_released* is ``True``.
+            branch: Branch name hint.  Ignored when *only_released* is ``True``.
+            only_released: When ``True`` (default), fetch the latest tagged
+                release instead of the ``main`` branch, so unreleased changes
+                never produce false compatibility signals.
+        """
+        if only_released:
+            tag = _fetch_latest_release_tag()
+            resolved_url = _GITHUB_TAG_ZIP.format(tag=tag)
+        else:
+            resolved_url = url
+        with urlopen(resolved_url) as resp:  # noqa: S310
             data = resp.read()
         zf = zipfile.ZipFile(io.BytesIO(data))
-        return _build_from_sources(_Sources.from_zip(zf, f"monty-{branch}/"))
+        # Auto-detect the root folder (e.g. 'monty-main/' or 'monty-0.4.0/')
+        prefix = zf.namelist()[0].split("/")[0] + "/"
+        return _build_from_sources(_Sources.from_zip(zf, prefix))
 
     # ── Cache-backed class-level accessors ────────────────────────────
 
     @classmethod
-    def _cached(cls, *, cache: bool = True) -> MontyCapabilities:
+    def _cached(cls, *, cache: bool = True, only_released: bool = True) -> MontyCapabilities:
         """Load capabilities from cache (or rebuild if *cache* is False)."""
         from .cache import get_capabilities
-        return get_capabilities(cache="auto" if cache else "regenerate")
+        return get_capabilities(cache="auto" if cache else "regenerate", only_released=only_released)
 
     @classmethod
-    def get_modules(cls, *, cache: bool = True) -> frozenset[str]:
+    def get_modules(cls, *, cache: bool = True, only_released: bool = True) -> frozenset[str]:
         """Return the set of importable stdlib module names Monty supports.
 
         Args:
             cache: Set to ``False`` to discard the on-disk cache and rebuild
                 from the GitHub source before returning.
+            only_released: When ``True`` (default), build capabilities from the
+                latest release tag instead of the ``main`` branch.
 
         Example::
 
             MontyCapabilities.get_modules()
             # frozenset({'asyncio', 'os', 'pathlib', 're', 'sys', 'typing'})
         """
-        return cls._cached(cache=cache).modules
+        return cls._cached(cache=cache, only_released=only_released).modules
 
     @classmethod
-    def get_builtins(cls, *, cache: bool = True) -> frozenset[str]:
+    def get_builtins(cls, *, cache: bool = True, only_released: bool = True) -> frozenset[str]:
         """Return the set of builtin function names Monty has implemented.
 
         Args:
             cache: Set to ``False`` to discard the on-disk cache and rebuild.
+            only_released: When ``True`` (default), use the latest release tag.
 
         Example::
 
             MontyCapabilities.get_builtins()
             # frozenset({'abs', 'all', 'any', 'bin', 'chr', …})
         """
-        return cls._cached(cache=cache).builtin_functions
+        return cls._cached(cache=cache, only_released=only_released).builtin_functions
 
     @classmethod
-    def get_types(cls, *, cache: bool = True) -> frozenset[str]:
+    def get_types(cls, *, cache: bool = True, only_released: bool = True) -> frozenset[str]:
         """Return the set of type constructor names available as builtins.
 
         Args:
             cache: Set to ``False`` to discard the on-disk cache and rebuild.
+            only_released: When ``True`` (default), use the latest release tag.
 
         Example::
 
             MontyCapabilities.get_types()
             # frozenset({'bool', 'bytes', 'dict', 'float', 'frozenset', …})
         """
-        return cls._cached(cache=cache).type_constructors
+        return cls._cached(cache=cache, only_released=only_released).type_constructors
 
     @classmethod
-    def get_exception_types(cls, *, cache: bool = True) -> frozenset[str]:
+    def get_exception_types(cls, *, cache: bool = True, only_released: bool = True) -> frozenset[str]:
         """Return the set of exception class names Monty supports.
 
         Args:
             cache: Set to ``False`` to discard the on-disk cache and rebuild.
+            only_released: When ``True`` (default), use the latest release tag.
 
         Example::
 
             MontyCapabilities.get_exception_types()
             # frozenset({'ValueError', 'TypeError', 'RuntimeError', …})
         """
-        return cls._cached(cache=cache).exception_types
+        return cls._cached(cache=cache, only_released=only_released).exception_types
 
     @classmethod
     def get_attrs_of_module(
@@ -359,6 +403,7 @@ class MontyCapabilities:
         module: str,
         *,
         cache: bool = True,
+        only_released: bool = True,
     ) -> frozenset[str]:
         """Return the set of attributes/functions available inside *module*.
 
@@ -368,6 +413,7 @@ class MontyCapabilities:
         Args:
             module: Module name, e.g. ``'asyncio'``, ``'os'``, ``'typing'``.
             cache: Set to ``False`` to discard the on-disk cache and rebuild.
+            only_released: When ``True`` (default), use the latest release tag.
 
         Example::
 
@@ -377,7 +423,7 @@ class MontyCapabilities:
             MontyCapabilities.get_attrs_of_module('typing')
             # frozenset({'Any', 'Optional', 'Union', 'List', …})
         """
-        caps = cls._cached(cache=cache)
+        caps = cls._cached(cache=cache, only_released=only_released)
         return caps.module_attributes.get(module, frozenset())
 
     # ── JSON serialisation ────────────────────────────────────────────

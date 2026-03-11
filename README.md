@@ -22,11 +22,15 @@ pip install -e .
 from monty_compat import monty_compat
 
 # One-shot check — loads capabilities from cache (or builds on first run)
+# By default uses the latest *released* version of Monty (only_released=True)
 ok, reasons = monty_compat("x = [i * 2 for i in range(10)]")
 # ok=True, reasons=[]
 
 ok, reasons = monty_compat("import json; json.loads('{}')")
 # ok=False, reasons=["module 'json' is not supported by Monty"]
+
+# Include unreleased changes from the main branch
+ok, reasons = monty_compat(code, only_released=False)
 
 # Force rebuild (ignores cache)
 ok, reasons = monty_compat(code, cache='regenerate')
@@ -37,10 +41,11 @@ ok, reasons = monty_compat(code, cache='off', monty_root='/path/to/monty')
 
 ## Cache
 
-Capabilities are cached at `~/.monty_compat/monty_{version}_compat.json`.
+Capabilities are cached at `~/.monty_compat/monty_{key}_compat.json`.
 
 - Default TTL: **12 hours**
-- Cache is version-keyed — each installed `pydantic-monty` version gets its own file
+- Cache key is `latest-release` when `only_released=True` (default), or `main` when `only_released=False`
+- Passing an explicit `monty_root` falls back to the installed `pydantic-monty` version as the key
 - `cache='regenerate'` forces a rebuild and overwrites the cache
 - `cache='off'` skips all cache I/O
 
@@ -49,8 +54,11 @@ Capabilities are cached at `~/.monty_compat/monty_{version}_compat.json`.
 ```python
 from monty_compat import MontyCapabilities
 
-# Build from GitHub (downloads ZIP in memory)
+# Build from the latest release tag on GitHub (default)
 caps = MontyCapabilities.from_github()
+
+# Build from the main branch (includes unreleased changes)
+caps = MontyCapabilities.from_github(only_released=False)
 
 # Build from a local monty repo checkout
 caps = MontyCapabilities.from_local('/path/to/monty')

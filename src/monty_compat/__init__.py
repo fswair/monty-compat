@@ -52,6 +52,7 @@ def monty_compat(
     ttl: int = _DEFAULT_TTL,
     cache_dir: str | Path | None = None,
     monty_root: str | Path | None = None,
+    only_released: bool = True,
 ) -> tuple[bool, list[str]]:
     """Check whether *code* can run in the Monty sandbox.
 
@@ -68,6 +69,9 @@ def monty_compat(
         cache_dir: Override the default ``~/.monty_compat/`` directory.
         monty_root: Path to a local Monty repo checkout.  When given, source
             is read from disk instead of being downloaded from GitHub.
+        only_released: When ``True`` (default), parse capabilities from the
+            latest tagged release instead of the ``main`` branch.  Pass
+            ``False`` to include unreleased changes from ``main``.
 
     Returns:
         ``(can_run, reasons)`` where *reasons* is an empty list when Monty
@@ -86,5 +90,6 @@ def monty_compat(
         ttl=ttl,
         cache_dir=cache_dir,
         monty_root=monty_root,
+        only_released=only_released,
     )
     return caps.check_code(code)

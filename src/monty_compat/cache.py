@@ -140,6 +140,7 @@ def get_capabilities(
     cache_dir: str | Path | None = None,
     monty_root: str | Path | None = None,
     version: str | None = None,
+    only_released: bool = True,
 ) -> MontyCapabilities:
     """Return a :class:`~monty_compat.MontyCapabilities` instance, using the
     on-disk cache when available and valid.
@@ -154,14 +155,25 @@ def get_capabilities(
         monty_root: Path to a local Monty repo checkout.  When given, source
             code is read from disk instead of downloaded from GitHub.
         version: Explicit version string for the cache key.  If ``None`` the
-            installed ``pydantic-monty`` version is used.
+            key is derived from *only_released* (see below).
+        only_released: When ``True`` (default), parse capabilities from the
+            latest tagged release instead of the ``main`` branch.  This avoids
+            false compatibility signals for unreleased changes.  The cache key
+            is ``'latest-release'`` in this mode and ``'main'`` otherwise.
     """
     from .capabilities import MontyCapabilities
 
     if cache not in ("auto", "regenerate", "off"):
         raise ValueError(f"cache must be 'auto', 'regenerate', or 'off'; got {cache!r}")
 
-    ver = version or _installed_monty_version()
+    if version is not None:
+        ver = version
+    elif monty_root is not None:
+        ver = _installed_monty_version()
+    elif only_released:
+        ver = "latest-release"
+    else:
+        ver = "main"
 
     # ── Try cache (unless disabled or forced regenerate) ────────────
     if cache == "auto":
@@ -173,7 +185,7 @@ def get_capabilities(
     if monty_root is not None:
         caps = MontyCapabilities.from_local(monty_root)
     else:
-        caps = MontyCapabilities.from_github()
+        caps = MontyCapabilities.from_github(only_released=only_released)
 
     # ── Persist ─────────────────────────────────────────────────────
     if cache != "off":

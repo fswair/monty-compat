@@ -47,5 +47,5 @@ def test_get_attrs_of_module_re() -> None:
 
 
 def test_get_attrs_of_module_unknown_returns_empty() -> None:
-    assert MontyCapabilities.get_attrs_of_module("math") == frozenset()
+    assert MontyCapabilities.get_attrs_of_module("sqlite3") == frozenset()
     assert MontyCapabilities.get_attrs_of_module("nonexistent") == frozenset()
