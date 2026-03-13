@@ -221,7 +221,7 @@ class _Sources:
         modules_prefix = prefix + _MODULES_DIR_REL + "/"
         for zi in zf.infolist():
             if zi.filename.startswith(modules_prefix) and zi.filename.endswith(".rs"):
-                stem = zi.filename[len(modules_prefix):].rstrip("/")
+                stem = zi.filename[len(modules_prefix) :].rstrip("/")
                 if stem and "/" not in stem and stem != "mod.rs":
                     mod_files[stem[:-3]] = zf.read(zi.filename).decode()
         return cls(
@@ -333,7 +333,10 @@ class MontyCapabilities:
     def _cached(cls, *, cache: bool = True, only_released: bool = True) -> MontyCapabilities:
         """Load capabilities from cache (or rebuild if *cache* is False)."""
         from .cache import get_capabilities
-        return get_capabilities(cache="auto" if cache else "regenerate", only_released=only_released)
+
+        return get_capabilities(
+            cache="auto" if cache else "regenerate", only_released=only_released
+        )
 
     @classmethod
     def get_modules(cls, *, cache: bool = True, only_released: bool = True) -> frozenset[str]:
@@ -383,7 +386,9 @@ class MontyCapabilities:
         return cls._cached(cache=cache, only_released=only_released).type_constructors
 
     @classmethod
-    def get_exception_types(cls, *, cache: bool = True, only_released: bool = True) -> frozenset[str]:
+    def get_exception_types(
+        cls, *, cache: bool = True, only_released: bool = True
+    ) -> frozenset[str]:
         """Return the set of exception class names Monty supports.
 
         Args:
@@ -467,8 +472,8 @@ class MontyCapabilities:
         """
         try:
             tree = ast.parse(code)
-        except SyntaxError:
-            return True, []
+        except SyntaxError as e:
+            return False, [f"SyntaxError: {e}"]
 
         reasons: list[str] = []
         self._check_node(tree, reasons)
@@ -540,6 +545,86 @@ class MontyCapabilities:
                     lines.append(f"      · {attr}")
             else:
                 lines.append(f"  - {name}")
+
+        return "\n".join(lines)
+
+    def to_prompt_context(self) -> str:
+        """Return a structured prompt block describing Monty's capabilities.
+
+        Intended to be injected into LLM code-generation prompts so the model
+        knows exactly what it can and cannot use inside the Monty sandbox.
+
+        Example::
+
+            prompt = f\"\"\"{caps.to_prompt_context()}
+
+            Write a function that reads an environment variable and returns it
+            as an integer, raising ValueError if it is not set.
+            \"\"\"
+        """
+        lines: list[str] = []
+
+        lines.append("## Monty Sandbox — Supported Python Features")
+        lines.append("")
+        lines.append(
+            "You are writing code that will run inside the Monty sandbox. "
+            "Monty is a restricted Python execution environment. "
+            "Only the features listed below are available. "
+            "Do NOT use any stdlib module, builtin, or language construct that is not listed here."
+        )
+
+        # ── Builtin functions ────────────────────────────────────────
+        lines.append("")
+        lines.append("### Built-in functions")
+        lines.append("The following built-in functions are available without any import:")
+        lines.append("")
+        lines.append(", ".join(sorted(self.builtin_functions)))
+
+        # ── Type constructors ────────────────────────────────────────
+        lines.append("")
+        lines.append("### Type constructors")
+        lines.append(
+            "The following names act as type constructors and are available without any import:"
+        )
+        lines.append("")
+        lines.append(", ".join(sorted(self.type_constructors)))
+
+        # ── Exception types ──────────────────────────────────────────
+        lines.append("")
+        lines.append("### Exception types")
+        lines.append("The following exception classes can be raised or caught without any import:")
+        lines.append("")
+        lines.append(", ".join(sorted(self.exception_types)))
+
+        # ── Modules ──────────────────────────────────────────────────
+        lines.append("")
+        lines.append("### Supported modules")
+        lines.append(
+            "Only the modules listed below can be imported. "
+            "For modules with a known attribute list, only those attributes are available — "
+            "anything not listed is unsupported."
+        )
+
+        for mod in sorted(self.modules):
+            attrs = self.module_attributes.get(mod, frozenset())
+            lines.append("")
+            if attrs:
+                lines.append(
+                    f"**`{mod}`** — available attributes: "
+                    + ", ".join(f"`{a}`" for a in sorted(attrs))
+                )
+            else:
+                lines.append(
+                    f"**`{mod}`** — full attribute list not statically known; "
+                    "import the module and use its documented API."
+                )
+
+        # ── Hard constraints ─────────────────────────────────────────
+        lines.append("")
+        lines.append("### Hard constraints")
+        lines.append("- Class definitions (`class`) are **not** supported.")
+        lines.append("- Only the modules listed above may be imported.")
+        lines.append("- Any builtin, type, or exception not listed above is unavailable.")
 
         return "\n".join(lines)
 
