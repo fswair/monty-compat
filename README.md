@@ -16,6 +16,12 @@ Or for development (from checkout):
 pip install -e .
 ```
 
+## API 
+
+You can tinker monty-compat API here: https://monty-compat-api.vercel.app/docs
+
+> To generate **monty-compatible** code generation prompt, send a **GET** request to https://monty-compat-api.vercel.app/prompt
+
 ## Quick start
 
 ```python
