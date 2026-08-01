@@ -157,11 +157,14 @@ jobs:
         run: |
           version="$(tr -d '[:space:]' < VERSION)"
           for crate in monty-compat monty-compat-extract; do
-            if curl --fail --silent "https://crates.io/api/v1/crates/${crate}/${version}" >/dev/null; then
-              echo "${crate} ${version} is already published"
-            else
-              cargo +1.95.0 publish --locked -p "${crate}"
-            fi
+            status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+              --header 'User-Agent: monty-compat-release-ci (https://github.com/fswair/monty-compat)' \
+              "https://crates.io/api/v1/crates/${crate}/${version}")"
+            case "${status}" in
+              200) echo "${crate} ${version} is already published" ;;
+              404) cargo +1.95.0 publish --locked -p "${crate}" ;;
+              *) echo "crates.io returned HTTP ${status} for ${crate} ${version}" >&2; exit 1 ;;
+            esac
           done
 
   publish:
