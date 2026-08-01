@@ -116,6 +116,8 @@ jobs:
           maturin-version: v1.11.5
           rust-toolchain: 1.95.0
           args: --out dist
+      - name: Verify source distribution license
+        run: tar -tzf dist/*.tar.gz | grep -q '/LICENSE$'
       - uses: actions/upload-artifact@v6
         with:
           name: sdist
@@ -153,8 +155,14 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: |
-          cargo +1.95.0 publish --locked -p monty-compat
-          cargo +1.95.0 publish --locked -p monty-compat-extract
+          version="$(tr -d '[:space:]' < VERSION)"
+          for crate in monty-compat monty-compat-extract; do
+            if curl --fail --silent "https://crates.io/api/v1/crates/${crate}/${version}" >/dev/null; then
+              echo "${crate} ${version} is already published"
+            else
+              cargo +1.95.0 publish --locked -p "${crate}"
+            fi
+          done
 
   publish:
     needs: [linux-wheel, macos-wheel, windows-wheel, sdist, smoke, publish-crates]
@@ -170,4 +178,6 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
       - name: Publish with PyPI trusted publishing
-        run: uv publish dist/*
+        run: >-
+          uv publish --trusted-publishing always
+          --check-url https://pypi.org/simple/ dist/*

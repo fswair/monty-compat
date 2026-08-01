@@ -57,6 +57,7 @@ module-name = "monty_compat._native"
 python-source = "src"
 bindings = "pyo3"
 include = [
+    {path = "LICENSE", format = "sdist"},
     {path = "CHANGELOG.md", format = "sdist"},
     {path = "manifests/*.json", format = "sdist"},
     {path = "docs/*.md", format = "sdist"},
