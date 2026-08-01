@@ -21,11 +21,16 @@ path = "src/main.rs"
 
 [dependencies]
 clap.workspace = true
-minreq.workspace = true
 regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 zip.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+minreq = { workspace = true, features = ["https-rustls"] }
+
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+minreq = { workspace = true, features = ["https-native-tls"] }
 
 [lints]
 workspace = true

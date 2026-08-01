@@ -34,7 +34,7 @@ pyo3 = { version = "=0.29.0", features = ["abi3-py310", "extension-module"] }
 regex = "1"
 sha2 = "0.10"
 zip = { version = "=8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
-minreq = { version = "=3.0.0", default-features = false, features = ["https-native-tls"] }
+minreq = { version = "=3.0.0", default-features = false }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

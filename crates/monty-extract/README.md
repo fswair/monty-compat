@@ -46,7 +46,8 @@ assert_eq!(local, zipped);
 - bounded compressed downloads and response metadata;
 - bounded ZIP entry count, individual files, and expanded total;
 - validated archive paths and UTF-8;
-- platform TLS with bounded redirects/timeouts;
+- portable Rustls TLS on Linux and native platform TLS elsewhere, with bounded
+  redirects/timeouts;
 - in-memory archive scanning, never filesystem extraction;
 - Rust `unsafe` forbidden.
 
