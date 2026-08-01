@@ -1,95 +1,61 @@
-"""monty_compat — Detect Monty-supported Python features from source.
+"""Release-aware Python compatibility for the Monty interpreter.
 
-Downloads the Monty Rust source from GitHub, parses the builtin function,
-type constructor, exception type, and module enums, then exposes an AST-based
-compatibility checker plus the raw capability sets.
+Use :func:`transpiler` to produce ordinary Python source for an exact bundled
+Monty release. It lowers only evidence-backed seams whose semantics can be
+preserved and raises :class:`TranspilationError` otherwise::
 
-Quick start::
+    from monty_compat import transpiler
 
-    # One-shot check — loads (or builds) capabilities automatically
-    from monty_compat import monty_compat
+    lowered = transpiler(source, release="0.0.19")
 
-    ok, reasons = monty_compat("import re\\nx = re.sub('a', 'b', 'abc')")
-    # ok=False, reasons=["module 're' is not supported by Monty"]
+Use :class:`MontyCapabilities` when the extracted capability graph itself is
+needed::
 
-    ok, reasons = monty_compat(code, cache='regenerate')  # force rebuild
-    ok, reasons = monty_compat(code, cache='off')         # skip cache
+    caps = MontyCapabilities.from_local("/path/to/monty")
+    caps.supports_path("pathlib.Path.is_dir")
 
-Cache files live at ``~/.monty_compat/monty_{version}_compat.json`` and
-expire after 12 hours by default.
-
-Lower-level API::
-
-    from monty_compat import MontyCapabilities
-
-    caps = MontyCapabilities.from_local('/path/to/monty')
-    caps = MontyCapabilities.from_github()
-
-    caps.builtin_functions   # frozenset — abs, all, any, …
-    caps.modules             # frozenset — sys, typing, asyncio, pathlib, os
-    caps.module_attributes   # dict     — {'asyncio': {'gather','run'}, …}
-    caps.type_constructors   # frozenset — int, str, list, …
-    caps.exception_types     # frozenset — ValueError, TypeError, …
-
-    ok, reasons = caps.check_code(some_code)
+Static extraction may use a 12-hour disk cache. The default verified
+transpilation hot path is native Rust, embeds versioned manifests, performs no
+network access or probes, and never executes the supplied source. The explicit
+``latest`` mode resolves a bounded and validated remote manifest once per
+process before lowering.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
+from typing import Any
 
-from .cache import _DEFAULT_TTL, get_capabilities
+from ._native import TranspilationError, transpiler
 from .capabilities import MontyCapabilities
+from .generated_discovery import GeneratedProbeConfig
 
-__all__ = ["MontyCapabilities", "monty_compat"]
+__all__ = [
+    "GeneratedProbeConfig",
+    "MontyCapabilities",
+    "TranspilationError",
+    "discover_latest_release",
+    "transpiler",
+    "write_manifest",
+]
 
 
-def monty_compat(
-    code: str,
+def discover_latest_release(
     *,
-    cache: Literal["auto", "regenerate", "off"] = "auto",
-    ttl: int = _DEFAULT_TTL,
-    cache_dir: str | Path | None = None,
-    monty_root: str | Path | None = None,
-    only_released: bool = True,
-) -> tuple[bool, list[str]]:
-    """Check whether *code* can run in the Monty sandbox.
+    allow_version_mismatch: bool = False,
+    generated_config: GeneratedProbeConfig | None = None,
+) -> dict[str, Any]:
+    """Build the latest release's static and behavioral capability manifest."""
+    from .discovery import discover_latest_release as _discover
 
-    Capabilities are loaded from the on-disk cache (``~/.monty_compat/``) when
-    available and fresh, otherwise built by parsing the Monty Rust source.
-
-    Args:
-        code: Python source code to analyse.
-        cache: Cache strategy.
-            ``'auto'`` (default) — use cache if fresh, rebuild on expiry;
-            ``'regenerate'`` — always rebuild and overwrite cache;
-            ``'off'`` — skip cache entirely.
-        ttl: Cache time-to-live in seconds (default: 43 200 = 12 h).
-        cache_dir: Override the default ``~/.monty_compat/`` directory.
-        monty_root: Path to a local Monty repo checkout.  When given, source
-            is read from disk instead of being downloaded from GitHub.
-        only_released: When ``True`` (default), parse capabilities from the
-            latest tagged release instead of the ``main`` branch.  Pass
-            ``False`` to include unreleased changes from ``main``.
-
-    Returns:
-        ``(can_run, reasons)`` where *reasons* is an empty list when Monty
-        should be able to execute the code without errors.
-
-    Example::
-
-        ok, reasons = monty_compat("x = [i*2 for i in range(10)]")
-        # ok=True, reasons=[]
-
-        ok, reasons = monty_compat("import json; json.loads('{}')")
-        # ok=False, reasons=["module 'json' is not supported by Monty"]
-    """
-    caps = get_capabilities(
-        cache=cache,
-        ttl=ttl,
-        cache_dir=cache_dir,
-        monty_root=monty_root,
-        only_released=only_released,
+    return _discover(
+        allow_version_mismatch=allow_version_mismatch,
+        generated_config=generated_config,
     )
-    return caps.check_code(code)
+
+
+def write_manifest(manifest: dict[str, Any], output: str | Path) -> Path:
+    """Write a capability manifest to disk."""
+    from .discovery import write_manifest as _write
+
+    return _write(manifest, output)

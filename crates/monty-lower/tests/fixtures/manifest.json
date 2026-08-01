@@ -1,0 +1,17 @@
+{
+  "target": {
+    "tag": "v0.0.19",
+    "runtime_version": "0.0.19"
+  },
+  "behavioral_capabilities": {
+    "features": {
+      "statement.function_decorator": {"status": "unsupported_parse"},
+      "statement.for_attribute_target": {"status": "unsupported_parse"},
+      "statement.for_subscript_target": {"status": "unsupported_parse"},
+      "with.attribute_target": {"status": "unsupported_parse"},
+      "with.empty_list_target": {"status": "unsupported_parse"},
+      "with.empty_tuple_target": {"status": "unsupported_parse"},
+      "with.subscript_target": {"status": "unsupported_parse"}
+    }
+  }
+}

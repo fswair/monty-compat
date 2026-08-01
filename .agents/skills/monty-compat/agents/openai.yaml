@@ -1,0 +1,4 @@
+interface:
+  display_name: "Monty Compat"
+  short_description: "Transpile and inspect Python for Monty"
+  default_prompt: "Use $monty-compat to transpile this Python safely for an exact Monty release."

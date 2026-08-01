@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 _DEFAULT_TTL = 12 * 3600  # 12 hours in seconds
 _DEFAULT_CACHE_DIR = Path.home() / ".monty_compat"
 _CACHE_VERSION_KEY = "cache_schema_version"
-_CACHE_SCHEMA = 1  # bump when the JSON layout changes incompatibly
+_CACHE_SCHEMA = 2  # includes source-derived runtime type attribute paths
 
 
 # ── Version detection ─────────────────────────────────────────────────

@@ -1,11 +1,11 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
 
 [project]
 name = "monty-compat"
-version = "0.4.1"
-description = "AST-based Python compatibility checker for the Monty interpreter"
+version = "0.5.0"
+description = "Release-aware Python source transpiler and capability discovery for Monty"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -16,37 +16,54 @@ keywords = ["monty", "pydantic-monty", "sandbox", "compatibility", "ast"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: Apache Software License",
+    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Testing",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 
-# No runtime dependencies — stdlib only (ast, re, zipfile, urllib, json, pathlib)
 dependencies = []
 
+[project.scripts]
+monty-compat-discover = "monty_compat.discovery:main"
+
 [project.optional-dependencies]
+discovery = [
+    "pydantic-monty",
+    "pysource-codegen==0.7.1",
+    "pysource-minimize==0.10.1",
+]
 dev = [
+    "mypy>=1.11",
     "pytest>=7.0",
     "pydantic-monty",
+    "pysource-codegen==0.7.1",
+    "pysource-minimize==0.10.1",
+    "ruff>=0.12",
 ]
 
 [project.urls]
 Homepage = "https://github.com/fswair/monty-compat"
 Repository = "https://github.com/fswair/monty-compat"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/monty_compat"]
-
-[tool.hatch.build.targets.sdist]
+[tool.maturin]
+manifest-path = "crates/monty-compat-python/Cargo.toml"
+module-name = "monty_compat._native"
+python-source = "src"
+bindings = "pyo3"
 include = [
-    "src/",
-    "README.md",
-    "pyproject.toml",
+    {path = "CHANGELOG.md", format = "sdist"},
+    {path = "manifests/*.json", format = "sdist"},
+    {path = "docs/*.md", format = "sdist"},
+    {path = "docs/stylesheets/*.css", format = "sdist"},
+    {path = "examples/README.md", format = "sdist"},
+    {path = "examples/**/*.py", format = "sdist"},
+    {path = "zensical.toml", format = "sdist"},
 ]
 
 [tool.pytest.ini_options]

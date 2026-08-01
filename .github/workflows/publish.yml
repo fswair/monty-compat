@@ -5,23 +5,169 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: read
+
 jobs:
-  publish:
+  rust-security-audit:
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - name: Audit publishable Rust dependency graphs
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          rust-version: "1.95.0"
+          command: check
+          arguments: --locked
+      - name: Audit isolated exact-Monty probe graph
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          rust-version: "1.95.0"
+          manifest-path: crates/monty-discover/Cargo.toml
+          command: check
+          arguments: --config crates/monty-discover/deny.toml --locked
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+  rust-crates-dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Rust 1.95
+        run: rustup toolchain install 1.95.0 --profile minimal
+      - name: Verify crates.io packages
+        run: |
+          cargo +1.95.0 package --locked -p monty-compat
+          cargo +1.95.0 package --locked -p monty-compat-extract
+
+  linux-wheel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build manylinux x86_64 wheel
+        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
+        with:
+          command: build
+          maturin-version: v1.11.5
+          rust-toolchain: 1.95.0
+          target: x86_64-unknown-linux-gnu
+          manylinux: "2_17"
+          args: --release --locked --compatibility pypi --out dist
+      - uses: actions/upload-artifact@v6
+        with:
+          name: wheel-linux-x86_64
+          path: dist/*.whl
+
+  macos-wheel:
+    strategy:
+      matrix:
+        include:
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            artifact: wheel-macos-x86_64
+          - runner: macos-15
+            target: aarch64-apple-darwin
+            artifact: wheel-macos-aarch64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+      - name: Build macOS wheel
+        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
+        with:
+          command: build
+          maturin-version: v1.11.5
+          rust-toolchain: 1.95.0
+          target: ${{ matrix.target }}
+          args: --release --locked --compatibility pypi --out dist
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/*.whl
+
+  windows-wheel:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+      - name: Build Windows x86_64 wheel
+        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
+        with:
+          command: build
+          maturin-version: v1.11.5
+          rust-toolchain: 1.95.0
+          target: x86_64-pc-windows-msvc
+          args: --release --locked --compatibility pypi --out dist
+      - uses: actions/upload-artifact@v6
+        with:
+          name: wheel-windows-x86_64
+          path: dist/*.whl
+
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build source distribution
+        uses: PyO3/maturin-action@86b9d133d34bc1b40018696f782949dac11bd380 # v1.49.4
+        with:
+          command: sdist
+          maturin-version: v1.11.5
+          rust-toolchain: 1.95.0
+          args: --locked --out dist
+      - uses: actions/upload-artifact@v6
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  smoke:
+    needs: linux-wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: wheel-linux-x86_64
+          path: dist
+      - uses: astral-sh/setup-uv@v8
         with:
           python-version: "3.11"
+      - name: Run the built wheel through exact Monty 0.0.19
+        run: |
+          uv run --isolated --no-project \
+            --with dist/*.whl --with pydantic-monty==0.0.19 \
+            python -c 'from monty_compat import transpiler; from pydantic_monty import Monty; code = "value = 2\nmatch value:\n    case 2:\n        result = f\"ok:{value}\"\nresult\n"; lowered = transpiler(code); assert lowered == transpiler(code, release="v0.0.19"); exec("with Monty() as pool:\n    with pool.checkout() as session:\n        assert session.feed_run(lowered) == \"ok:2\"")'
 
+  publish-crates:
+    needs: [rust-security-audit, rust-crates-dry-run, smoke]
+    runs-on: ubuntu-latest
+    environment:
+      name: crates-io
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Rust 1.95
+        run: rustup toolchain install 1.95.0 --profile minimal
+      - name: Publish Rust crates
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+        run: |
+          cargo +1.95.0 publish --locked -p monty-compat
+          cargo +1.95.0 publish --locked -p monty-compat-extract
+
+  publish:
+    needs: [linux-wheel, macos-wheel, windows-wheel, sdist, smoke, publish-crates]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          path: dist
+          merge-multiple: true
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Build package
-        run: uv build
-
-      - name: Publish to PyPI
-        run: uv publish --token ${{ secrets.PYPI_TOKEN }}
+        uses: astral-sh/setup-uv@v8
+      - name: Publish with PyPI trusted publishing
+        run: uv publish dist/*

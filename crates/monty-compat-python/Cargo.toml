@@ -1,0 +1,28 @@
+[package]
+name = "monty-compat-python"
+build = "build.rs"
+description = "PyO3 bindings for the Monty compatibility transpiler"
+publish = false
+edition.workspace = true
+rust-version.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "_native"
+crate-type = ["cdylib"]
+
+[dependencies]
+monty-compat = { version = "0.5.0", path = "../monty-lower" }
+monty-compat-extract = { version = "0.5.0", path = "../monty-extract" }
+pyo3.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[build-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

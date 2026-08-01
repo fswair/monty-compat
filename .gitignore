@@ -159,6 +159,9 @@ venv.bak/
 .dmypy.json
 dmypy.json
 
+# Agent planning scratch files
+*_PLAN.md
+
 # Pyre type checker
 .pyre/
 
@@ -193,6 +196,12 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Local release credentials
+.cargo-key
+
+# Local capability inspection output (release manifests live in manifests/)
+extraction_results.json
 
 # Cursor
 #  Cursor is an AI-powered code editor. `.cursorignore` specifies files/directories to

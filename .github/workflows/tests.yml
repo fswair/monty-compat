@@ -7,22 +7,96 @@ on:
     branches: [main, master]
 
 jobs:
-  test:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v8
+        with:
+          python-version: "3.11"
+      - name: Build documentation and validate links
+        run: uvx --from zensical==0.0.50 zensical build --clean
+
+  dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Audit publishable Rust dependency graphs
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          rust-version: "1.95.0"
+          command: check
+          arguments: --locked
+      - name: Audit isolated exact-Monty probe graph
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          rust-version: "1.95.0"
+          manifest-path: crates/monty-discover/Cargo.toml
+          command: check
+          arguments: --config crates/monty-discover/deny.toml --locked
+
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust 1.95
+        run: rustup toolchain install 1.95.0 --profile minimal --component clippy,rustfmt
+
+      - name: Install uv and CPython 3.11
+        uses: astral-sh/setup-uv@v8
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      - name: Install discovery dependencies
+        run: uv sync --locked --extra dev
+
+      - name: Check formatting
+        run: |
+          cargo +1.95.0 fmt --all -- --check
+          cargo +1.95.0 fmt --manifest-path crates/monty-discover/Cargo.toml --all -- --check
+
+      - name: Lint Rust
+        run: |
+          cargo +1.95.0 clippy --workspace --all-targets --locked -- -D warnings
+          cargo +1.95.0 clippy --manifest-path crates/monty-discover/Cargo.toml --all-targets --locked -- -D warnings
+
+      - name: Test Rust workspace
+        env:
+          MONTY_COMPAT_CPYTHON: .venv/bin/python
+        run: |
+          cargo +1.95.0 test --workspace --locked
+          cargo +1.95.0 test --manifest-path crates/monty-discover/Cargo.toml --locked
+
+  python:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+
+      - name: Install Rust 1.95
+        run: rustup toolchain install 1.95.0 --profile minimal
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v8
         with:
           python-version: ${{ matrix.python-version }}
+          enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --locked --extra dev
 
       - name: Run tests
         run: uv run pytest -v
+
+      - name: Lint Python
+        if: matrix.python-version == '3.11'
+        run: uv run ruff check src tests examples .agents/skills/monty-compat/scripts
+
+      - name: Type-check Python
+        if: matrix.python-version == '3.11'
+        run: uv run mypy src

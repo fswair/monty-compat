@@ -1,0 +1,31 @@
+[package]
+name = "monty-compat-extract"
+description = "Static capability graph extraction from Monty's Rust source"
+readme = "README.md"
+keywords = ["monty", "python", "capabilities", "parser", "sandbox"]
+categories = ["development-tools", "parser-implementations"]
+publish = ["crates-io"]
+edition.workspace = true
+rust-version.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "monty_compat_extract"
+path = "src/lib.rs"
+
+[[bin]]
+name = "monty-extract"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+minreq.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+zip.workspace = true
+
+[lints]
+workspace = true

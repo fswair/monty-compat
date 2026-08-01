@@ -1,0 +1,45 @@
+[workspace]
+resolver = "2"
+
+[package]
+name = "monty-compat-discover"
+description = "Rust orchestration for version-pinned Monty capability probes"
+publish = false
+edition = "2024"
+rust-version = "1.95"
+version = "0.5.0"
+license = "MIT"
+repository = "https://github.com/fswair/monty-compat"
+
+[lib]
+name = "monty_compat_discover"
+path = "src/lib.rs"
+
+[[bin]]
+name = "monty-discover"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+monty = "=0.0.19"
+monty-compat-extract = { version = "0.5.0", path = "../monty-extract" }
+monty-types = "=0.0.19"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["arbitrary_precision"] }
+
+[dev-dependencies]
+monty-compat = { version = "0.5.0", path = "../monty-lower" }
+
+[[test]]
+name = "differential"
+path = "../monty-lower/tests/differential.rs"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+missing_errors_doc = "allow"
+module_name_repetitions = "allow"
+too_many_lines = "allow"

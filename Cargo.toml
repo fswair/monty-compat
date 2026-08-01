@@ -1,0 +1,47 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/monty-compat-python",
+    "crates/monty-extract",
+    "crates/monty-lower",
+]
+exclude = ["crates/monty-discover"]
+default-members = ["crates/monty-lower"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.95"
+version = "0.5.0"
+license = "MIT"
+repository = "https://github.com/fswair/monty-compat"
+homepage = "https://github.com/fswair/monty-compat"
+
+[workspace.dependencies]
+# Kept in lockstep with Monty v0.0.19 so discovery and lowering parse the
+# same Python grammar with the same AST shapes.
+ruff_python_ast = "=0.0.3"
+ruff_python_parser = "=0.0.3"
+ruff_text_size = "=0.0.3"
+# Ruff 0.0.3's broad transitive ranges no longer resolve compatibly against
+# today's registry. Keep these at the versions recorded by Monty v0.0.19.
+compact_str = "=0.9.0"
+get-size2 = "=0.10.1"
+
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["arbitrary_precision"] }
+pyo3 = { version = "=0.29.0", features = ["abi3-py310", "extension-module"] }
+regex = "1"
+sha2 = "0.10"
+zip = { version = "=8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+minreq = { version = "=3.0.0", default-features = false, features = ["https-native-tls"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+missing_errors_doc = "allow"
+module_name_repetitions = "allow"
+too_many_lines = "allow"

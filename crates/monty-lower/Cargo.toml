@@ -1,0 +1,55 @@
+[package]
+name = "monty-compat"
+autotests = false
+description = "Manifest-driven Python lowering for the Monty interpreter"
+readme = "README.md"
+keywords = ["monty", "python", "transpiler", "ast", "sandbox"]
+categories = ["compilers", "development-tools"]
+publish = ["crates-io"]
+exclude = ["tests/differential.rs"]
+edition.workspace = true
+rust-version.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "monty_compat"
+path = "src/lib.rs"
+
+[[bin]]
+name = "monty-lower"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+compact_str.workspace = true
+get-size2.workspace = true
+ruff_python_ast.workspace = true
+ruff_python_parser.workspace = true
+ruff_text_size.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
+
+[[test]]
+name = "cache"
+path = "tests/cache.rs"
+
+[[test]]
+name = "diagnostics"
+path = "tests/diagnostics.rs"
+
+[[test]]
+name = "golden"
+path = "tests/golden.rs"
+
+[[test]]
+name = "representable"
+path = "tests/representable.rs"
+
+[[test]]
+name = "safety"
+path = "tests/safety.rs"
