@@ -129,7 +129,7 @@ jobs:
         with:
           name: wheel-linux-x86_64
           path: dist
-      - uses: astral-sh/setup-uv@v8
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           python-version: "3.11"
       - name: Run the built wheel through exact Monty 0.0.19
@@ -168,6 +168,6 @@ jobs:
           path: dist
           merge-multiple: true
       - name: Install uv
-        uses: astral-sh/setup-uv@v8
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
       - name: Publish with PyPI trusted publishing
         run: uv publish dist/*
