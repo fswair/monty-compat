@@ -7,8 +7,21 @@ from textwrap import dedent
 from .probes import ProbeSpec
 
 
-def _probe(id: str, category: str, source: str, description: str) -> ProbeSpec:
-    return ProbeSpec(id, category, dedent(source).strip(), description)
+def _probe(
+    id: str,
+    category: str,
+    source: str,
+    description: str,
+    *,
+    minimum_python: tuple[int, int] = (3, 10),
+) -> ProbeSpec:
+    return ProbeSpec(
+        id,
+        category,
+        dedent(source).strip(),
+        description,
+        minimum_python=minimum_python,
+    )
 
 
 EXTENDED_PROBES: tuple[ProbeSpec, ...] = (
@@ -92,6 +105,7 @@ EXTENDED_PROBES: tuple[ProbeSpec, ...] = (
         result
         """,
         "Exception-group except-star statement",
+        minimum_python=(3, 11),
     ),
     _probe(
         "statement.raise_from",

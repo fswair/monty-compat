@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from typing import Any
 
 from monty_compat import MontyCapabilities
@@ -11,6 +12,7 @@ from monty_compat.probe_catalog_protocols import PROTOCOL_MATRIX_PROBES
 from monty_compat.probes import (
     ProbeSpec,
     ProbeStatus,
+    is_probe_supported_by_host,
     iter_invalid_catalog_entries,
     run_on_cpython,
     run_probe,
@@ -43,7 +45,14 @@ def test_baseline_catalog_is_unique_valid_and_cpython_executable() -> None:
     assert len(BASELINE_PROBES) == 269
     assert len(PROTOCOL_MATRIX_PROBES) == 33
     assert list(iter_invalid_catalog_entries(BASELINE_PROBES)) == []
-    assert all(run_on_cpython(spec.source) is not NotImplemented for spec in BASELINE_PROBES)
+    assert all(
+        run_on_cpython(spec.source) is not NotImplemented
+        for spec in BASELINE_PROBES
+        if is_probe_supported_by_host(spec)
+    )
+    try_star = next(spec for spec in BASELINE_PROBES if spec.id == "statement.try_star")
+    assert try_star.minimum_python == (3, 11)
+    assert is_probe_supported_by_host(try_star) is (sys.version_info >= (3, 11))
 
 
 def test_probe_classifies_support_mismatch_and_parser_rejection() -> None:

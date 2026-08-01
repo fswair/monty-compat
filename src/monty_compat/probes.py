@@ -33,6 +33,12 @@ class ProbeSpec:
     category: str
     source: str
     description: str
+    minimum_python: tuple[int, int] = (3, 10)
+
+
+def is_probe_supported_by_host(spec: ProbeSpec) -> bool:
+    """Return whether the running CPython can parse and execute *spec*."""
+    return sys.version_info[:2] >= spec.minimum_python
 
 
 @dataclass(frozen=True)
@@ -179,6 +185,17 @@ def ast_nodes_in(source: str) -> tuple[str, ...]:
 
 def run_probe(spec: ProbeSpec, runner: ProbeRunner) -> ProbeResult:
     """Run one probe on CPython and Monty, then classify the outcome."""
+    if not is_probe_supported_by_host(spec):
+        required = ".".join(str(part) for part in spec.minimum_python)
+        current = ".".join(str(part) for part in sys.version_info[:2])
+        return ProbeResult(
+            id=spec.id,
+            category=spec.category,
+            description=spec.description,
+            status=ProbeStatus.INVALID_PROBE,
+            error_type="UnsupportedPythonVersion",
+            error_message=f"probe requires CPython {required}+; running {current}",
+        )
     try:
         ast_nodes = ast_nodes_in(spec.source)
     except SyntaxError:
@@ -258,6 +275,8 @@ def iter_invalid_catalog_entries(specs: Sequence[ProbeSpec]) -> Iterator[str]:
         seen.add(spec.id)
         if not spec.category:
             yield f"{spec.id}: empty category"
+        if not is_probe_supported_by_host(spec):
+            continue
         try:
             ast.parse(spec.source)
         except SyntaxError as exc:
